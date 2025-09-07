@@ -3,19 +3,22 @@
 <head>
   <title>Shaka Player Tester</title>
   <style>
-    body { font-family: sans-serif; }
-    #video-container { width: 640px; height: 360px; background-color: black; }
+    body { font-family: sans-serif; max-width: 800px; margin: 20px auto; }
+    #video-container { width: 100%; max-width: 640px; background-color: black; margin-top: 20px; }
     .input-group { margin-bottom: 10px; }
     label { display: block; margin-bottom: 5px; }
     input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
     button { padding: 10px 15px; }
+    #error-display { margin-top: 20px; padding: 10px; background-color: #fdd; border: 1px solid #f00; color: #a00; display: none; white-space: pre-wrap; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.4/dist/shaka-player.ui.js"></script>
+  <!-- Using the debug library for better error messages -->
+  <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.4/dist/shaka-player.ui.debug.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shaka-player@4.3.4/dist/controls.css">
 </head>
 <body>
 
   <h1>Shaka Player Tester</h1>
+  <p>Open your browser's developer console (F12 or Ctrl+Shift+I) to see detailed logs.</p>
 
   <div class="input-group">
     <label for="manifestUri">Manifest URI:</label>
@@ -23,61 +26,91 @@
   </div>
 
   <div class="input-group">
-    <label for="k1">Key ID (K1):</label>
+    <label for="k1">Key ID (K1) in hex:</label>
     <input type="text" id="k1" placeholder="Enter Key ID (hex)">
   </div>
 
   <div class="input-group">
-    <label for="k2">Key (K2):</label>
+    <label for="k2">Key (K2) in hex:</label>
     <input type="text" id="k2" placeholder="Enter Key (hex)">
   </div>
 
   <button id="loadButton">Load</button>
 
+  <div id="error-display"></div>
+
   <div id="video-container">
-    <video id="video" style="width:100%;height:100%;" controls autoplay></video>
+    <video id="video" style="width:100%;height:100%;" poster="//shaka-player-demo.appspot.com/assets/poster.jpg" controls autoplay></video>
   </div>
 
   <script>
-    async function initPlayer() {
+    // Global variables for player and ui so they can be accessed by our functions
+    let player;
+    let ui;
+    const video = document.getElementById('video');
+    const videoContainer = document.getElementById('video-container');
+    const errorDisplay = document.getElementById('error-display');
+
+    // This function sets up the player and UI controls. It only needs to run once.
+    function init() {
+      // Create a Player instance.
+      player = new shaka.Player(video);
+
+      // Create a UI instance.
+      ui = new shaka.ui.Overlay(player, videoContainer, video);
+      
+      // You can get a reference to the controls, but we don't need to for this simple setup.
+      // const controls = ui.getControls();
+
+      // Listen for errors from the Player.
+      player.addEventListener('error', onError);
+    }
+
+    // This function is called when the player throws an error.
+    function onError(event) {
+      const error = event.detail;
+      console.error('Error code', error.code, 'object', error);
+      
+      // Display the error on the page
+      errorDisplay.textContent = `Shaka Player Error:\nCategory: ${shaka.util.Error.Category[error.category]} (${error.category})\nCode: ${error.code}\nData: ${JSON.stringify(error.data)}`;
+      errorDisplay.style.display = 'block';
+    }
+
+    // This function is called when the "Load" button is clicked.
+    async function loadStream() {
       const manifestUri = document.getElementById('manifestUri').value;
-      const k1 = document.getElementById('k1').value;
-      const k2 = document.getElementById('k2').value;
+      const k1 = document.getElementById('k1').value.trim();
+      const k2 = document.getElementById('k2').value.trim();
+
+      // Hide previous errors
+      errorDisplay.style.display = 'none';
 
       if (!manifestUri) {
         alert('Please enter a Manifest URI.');
         return;
       }
 
-      const video = document.getElementById('video');
-      const ui = video['ui'];
-      const controls = ui.getControls();
-      const player = controls.getPlayer();
-
-      player.configure({
-        drm: {
-          clearKeys: {
-            [k1]: k2
-          }
-        }
-      });
+      // Configure the player with clear keys if they are provided.
+      const config = { drm: {} };
+      if (k1 && k2) {
+        config.drm.clearKeys = { [k1]: k2 };
+      }
+      player.configure(config);
 
       try {
+        // Load the manifest URI into the player.
         await player.load(manifestUri);
         console.log('The video has now been loaded!');
       } catch (e) {
-        console.error('Error code', e.code, 'object', e);
+        // The 'error' event listener will handle and display the error.
+        console.error('Failed to load manifest:', e);
       }
     }
 
-    function init() {
-      const video = document.getElementById('video');
-      const ui = new shaka.ui.Overlay(video, document.getElementById('video-container'), video);
-      ui.getControls(); // This will create the controls object.
-    }
-
+    // Listen for the page to be loaded to run our init function.
     document.addEventListener('DOMContentLoaded', init);
-    document.getElementById('loadButton').addEventListener('click', initPlayer);
+    // Listen for clicks on our "Load" button.
+    document.getElementById('loadButton').addEventListener('click', loadStream);
   </script>
 
 </body>
