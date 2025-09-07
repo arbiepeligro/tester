@@ -40,7 +40,8 @@
   <div id="error-display"></div>
 
   <div id="video-container">
-    <video id="video" style="width:100%;height:100%;" poster="//shaka-player-demo.appspot.com/assets/poster.jpg" controls autoplay></video>
+    <!-- The "controls" attribute has been REMOVED from the video tag below -->
+    <video id="video" style="width:100%;height:100%;" poster="//shaka-player-demo.appspot.com/assets/poster.jpg" autoplay></video>
   </div>
 
   <script>
@@ -59,9 +60,6 @@
       // Create a UI instance.
       ui = new shaka.ui.Overlay(player, videoContainer, video);
       
-      // You can get a reference to the controls, but we don't need to for this simple setup.
-      // const controls = ui.getControls();
-
       // Listen for errors from the Player.
       player.addEventListener('error', onError);
     }
