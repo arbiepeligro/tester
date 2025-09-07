@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Shaka Player Tester</title>
+  <style>
+    body { font-family: sans-serif; }
+    #video-container { width: 640px; height: 360px; background-color: black; }
+    .input-group { margin-bottom: 10px; }
+    label { display: block; margin-bottom: 5px; }
+    input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
+    button { padding: 10px 15px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.4/dist/shaka-player.ui.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shaka-player@4.3.4/dist/controls.css">
+</head>
+<body>
+
+  <h1>Shaka Player Tester</h1>
+
+  <div class="input-group">
+    <label for="manifestUri">Manifest URI:</label>
+    <input type="text" id="manifestUri" placeholder="Enter Manifest URI">
+  </div>
+
+  <div class="input-group">
+    <label for="k1">Key ID (K1):</label>
+    <input type="text" id="k1" placeholder="Enter Key ID (hex)">
+  </div>
+
+  <div class="input-group">
+    <label for="k2">Key (K2):</label>
+    <input type="text" id="k2" placeholder="Enter Key (hex)">
+  </div>
+
+  <button id="loadButton">Load</button>
+
+  <div id="video-container">
+    <video id="video" style="width:100%;height:100%;" controls autoplay></video>
+  </div>
+
+  <script>
+    async function initPlayer() {
+      const manifestUri = document.getElementById('manifestUri').value;
+      const k1 = document.getElementById('k1').value;
+      const k2 = document.getElementById('k2').value;
+
+      if (!manifestUri) {
+        alert('Please enter a Manifest URI.');
+        return;
+      }
+
+      const video = document.getElementById('video');
+      const ui = video['ui'];
+      const controls = ui.getControls();
+      const player = controls.getPlayer();
+
+      player.configure({
+        drm: {
+          clearKeys: {
+            [k1]: k2
+          }
+        }
+      });
+
+      try {
+        await player.load(manifestUri);
+        console.log('The video has now been loaded!');
+      } catch (e) {
+        console.error('Error code', e.code, 'object', e);
+      }
+    }
+
+    function init() {
+      const video = document.getElementById('video');
+      const ui = new shaka.ui.Overlay(video, document.getElementById('video-container'), video);
+      ui.getControls(); // This will create the controls object.
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+    document.getElementById('loadButton').addEventListener('click', initPlayer);
+  </script>
+
+</body>
+</html>
