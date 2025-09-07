@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Shaka Player Tester</title>
+  <title>Shaka Player Channel Tester</title>
   <style>
     body { font-family: sans-serif; max-width: 800px; margin: 20px auto; }
     #video-container { width: 100%; max-width: 640px; background-color: black; margin-top: 20px; }
     .input-group { margin-bottom: 10px; }
-    label { display: block; margin-bottom: 5px; }
-    input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
-    button { padding: 10px 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input[type="text"], select { width: 100%; padding: 8px; box-sizing: border-box; }
+    button { padding: 10px 15px; margin-top: 10px; }
     #error-display { margin-top: 20px; padding: 10px; background-color: #fdd; border: 1px solid #f00; color: #a00; display: none; white-space: pre-wrap; }
+    hr { margin: 20px 0; }
   </style>
   <!-- Using the debug library for better error messages -->
   <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.4/dist/shaka-player.ui.debug.js"></script>
@@ -17,9 +18,19 @@
 </head>
 <body>
 
-  <h1>Shaka Player Tester</h1>
-  <p>Open your browser's developer console (F12 or Ctrl+Shift+I) to see detailed logs.</p>
+  <h1>Shaka Player Channel Tester</h1>
+  <p>Select a channel from the dropdown to automatically load it, or enter details manually below.</p>
 
+  <div class="input-group">
+    <label for="channelSelector">Select Channel:</label>
+    <select id="channelSelector">
+      <option value="">-- Please choose a channel --</option>
+    </select>
+  </div>
+
+  <hr>
+
+  <h2>Manual Input</h2>
   <div class="input-group">
     <label for="manifestUri">Manifest URI:</label>
     <input type="text" id="manifestUri" placeholder="Enter Manifest URI">
@@ -35,56 +46,92 @@
     <input type="text" id="k2" placeholder="Enter Key (hex)">
   </div>
 
-  <button id="loadButton">Load</button>
+  <button id="loadButton">Load Manual Input</button>
 
   <div id="error-display"></div>
 
   <div id="video-container">
-    <!-- The "controls" attribute has been REMOVED from the video tag below -->
     <video id="video" style="width:100%;height:100%;" poster="//shaka-player-demo.appspot.com/assets/poster.jpg" autoplay></video>
   </div>
 
   <script>
-    // Global variables for player and ui so they can be accessed by our functions
+    // Global variables
     let player;
     let ui;
+    let channelData; // To store the fetched channel data
     const video = document.getElementById('video');
     const videoContainer = document.getElementById('video-container');
     const errorDisplay = document.getElementById('error-display');
+    const manifestUriInput = document.getElementById('manifestUri');
+    const k1Input = document.getElementById('k1');
+    const k2Input = document.getElementById('k2');
+    const channelSelector = document.getElementById('channelSelector');
+
+    // Sets up the player, UI, and fetches channel data.
+    async function initApp() {
+      initPlayerAndUi();
+      await fetchChannels();
+    }
 
     // This function sets up the player and UI controls. It only needs to run once.
-    function init() {
-      // Create a Player instance.
+    function initPlayerAndUi() {
       player = new shaka.Player(video);
-
-      // Create a UI instance.
       ui = new shaka.ui.Overlay(player, videoContainer, video);
-      
-      // Listen for errors from the Player.
       player.addEventListener('error', onError);
     }
 
-    // This function is called when the player throws an error.
-    function onError(event) {
-      const error = event.detail;
-      console.error('Error code', error.code, 'object', error);
-      
-      // Display the error on the page
-      errorDisplay.textContent = `Shaka Player Error:\nCategory: ${shaka.util.Error.Category[error.category]} (${error.category})\nCode: ${error.code}\nData: ${JSON.stringify(error.data)}`;
-      errorDisplay.style.display = 'block';
+    // Fetches the channel data and populates the dropdown.
+    async function fetchChannels() {
+      try {
+        const response = await fetch('getChannels.js');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}. Make sure getChannels.js is in the same directory.`);
+        }
+        channelData = await response.json();
+        
+        // Populate the dropdown
+        for (const channelName in channelData) {
+          const option = document.createElement('option');
+          option.value = channelName;
+          option.textContent = channelName.replace(/_/g, ' '); // Replace underscores for readability
+          channelSelector.appendChild(option);
+        }
+      } catch (e) {
+        console.error('Failed to fetch or parse getChannels.js:', e);
+        errorDisplay.textContent = `Error loading channels: ${e.message}`;
+        errorDisplay.style.display = 'block';
+      }
     }
 
-    // This function is called when the "Load" button is clicked.
-    async function loadStream() {
-      const manifestUri = document.getElementById('manifestUri').value;
-      const k1 = document.getElementById('k1').value.trim();
-      const k2 = document.getElementById('k2').value.trim();
+    // Handles the selection from the dropdown menu.
+    function onChannelSelect(event) {
+      const channelName = event.target.value;
+      if (!channelName || !channelData) {
+        manifestUriInput.value = '';
+        k1Input.value = '';
+        k2Input.value = '';
+        return;
+      }
 
-      // Hide previous errors
+      const channel = channelData[channelName];
+      manifestUriInput.value = channel.url || '';
+      k1Input.value = channel.k1 || '';
+      k2Input.value = channel.k2 || '';
+      
+      // Automatically load the selected stream
+      loadStream();
+    }
+
+    // Loads the stream based on the values in the input fields.
+    async function loadStream() {
+      const manifestUri = manifestUriInput.value;
+      const k1 = k1Input.value.trim();
+      const k2 = k2Input.value.trim();
+
       errorDisplay.style.display = 'none';
 
       if (!manifestUri) {
-        alert('Please enter a Manifest URI.');
+        alert('Manifest URI is empty.');
         return;
       }
 
@@ -96,7 +143,6 @@
       player.configure(config);
 
       try {
-        // Load the manifest URI into the player.
         await player.load(manifestUri);
         console.log('The video has now been loaded!');
       } catch (e) {
@@ -105,10 +151,18 @@
       }
     }
 
-    // Listen for the page to be loaded to run our init function.
-    document.addEventListener('DOMContentLoaded', init);
-    // Listen for clicks on our "Load" button.
+    // This function is called when the player throws an error.
+    function onError(event) {
+      const error = event.detail;
+      console.error('Error code', error.code, 'object', error);
+      errorDisplay.textContent = `Shaka Player Error:\nCategory: ${shaka.util.Error.Category[error.category]} (${error.category})\nCode: ${error.code}\nData: ${JSON.stringify(error.data, null, 2)}`;
+      errorDisplay.style.display = 'block';
+    }
+
+    // --- EVENT LISTENERS ---
+    document.addEventListener('DOMContentLoaded', initApp);
     document.getElementById('loadButton').addEventListener('click', loadStream);
+    channelSelector.addEventListener('change', onChannelSelect);
   </script>
 
 </body>
